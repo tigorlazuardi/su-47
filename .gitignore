@@ -1,0 +1,13 @@
+node_modules/
+dist/
+
+# Secrets
+.env
+su-47.config.json
+
+# Bun
+bun.lockb
+
+# OS
+.DS_Store
+Thumbs.db

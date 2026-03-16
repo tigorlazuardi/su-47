@@ -1,0 +1,28 @@
+{
+  "name": "su-47",
+  "version": "0.1.0",
+  "description": "Autonomous coding agent bridging Plane with Claude Code CLI",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check src/",
+    "format": "biome format --write src/",
+    "lint": "biome lint src/",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/bun": "latest",
+    "husky": "latest",
+    "lint-staged": "latest",
+    "typescript": "latest"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
+  }
+}
