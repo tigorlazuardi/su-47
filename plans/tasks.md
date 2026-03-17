@@ -181,7 +181,7 @@
   - Handle errors: update state, post error comment
   - Clean up result.json after reading
 
-## Phase 11: Auth Web UI
+## Phase 11: Auth Backend (src/auth.ts)
 
 - [ ] `src/auth.ts` — Claude CLI OAuth integration
   - `getAuthStatus()` — run `claude auth status --json`, parse output
@@ -196,28 +196,100 @@
   - `logout()` — spawn `claude auth logout`, await completion
   - Module-level `activeLoginSession: LoginSession | null` (only one at a time)
 
-- [ ] `src/pages.ts` — HTML page generators (no template engine, inline CSS)
-  - `statusPage(authStatus)` — email, org, subscription type + logout button
-  - `loginPage(oauthUrl)` — clickable OAuth link (new tab) + auth code input + submit
-    - Show link to `/setup-token` as alternative
-  - `setupTokenPage()` — token input form + link back to `/login`
-  - `errorPage(message, backUrl)` — error with back link
-  - All pages: minimal inline CSS, 100% functional without JS (plain HTML forms)
+## Phase 11b: Auth Web UI (SPA)
+
+Stack: **React + Vite + shadcn/ui + Tailwind CSS**
+Location: `ui/` directory, build output to `ui/dist/`
+Served: statically from `Bun.serve()` under `/`
+
+### Directory Structure
+
+```
+ui/
+├── src/
+│   ├── main.tsx           # React entrypoint
+│   ├── App.tsx            # Root component + routing (react-router-dom)
+│   ├── lib/
+│   │   ├── api.ts         # fetch wrappers for /api/* endpoints
+│   │   └── utils.ts       # cn() and other shadcn utils
+│   ├── components/
+│   │   └── ui/            # shadcn generated components
+│   ├── pages/
+│   │   ├── StatusPage.tsx     # Logged-in: email, org, plan + logout
+│   │   ├── LoginPage.tsx      # OAuth URL link + auth code input
+│   │   └── SetupTokenPage.tsx # Long-lived token input
+│   └── hooks/
+│       └── useAuthStatus.ts   # Polling /api/auth/status
+├── index.html
+├── vite.config.ts
+├── tailwind.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+### API Endpoints (JSON, served by src/index.ts)
+
+| Method | Path                 | Body                  | Response                        |
+|--------|----------------------|-----------------------|---------------------------------|
+| GET    | `/api/auth/status`   | —                     | `AuthStatus` JSON               |
+| POST   | `/api/auth/login`    | —                     | `{ oauthUrl: string }`          |
+| POST   | `/api/auth/code`     | `{ code: string }`    | `{ ok: true }`                  |
+| POST   | `/api/auth/token`    | `{ token: string }`   | `{ ok: true }`                  |
+| POST   | `/api/auth/logout`   | —                     | `{ ok: true }`                  |
+
+### UI Pages
+
+- [ ] `StatusPage.tsx` — when `loggedIn: true`
+  - Show: email, org name, subscription type
+  - Badge for auth method (oauth / token)
+  - Logout button → POST `/api/auth/logout` → redirect to LoginPage
+
+- [ ] `LoginPage.tsx` — when `loggedIn: false`
+  - Primary: "Start OAuth Login" button → POST `/api/auth/login` → show OAuth URL
+  - OAuth URL displayed as clickable link (opens new tab)
+  - Input field + submit for auth code → POST `/api/auth/code`
+  - Secondary: link to SetupTokenPage
+  - Loading state while waiting for OAuth URL
+
+- [ ] `SetupTokenPage.tsx`
+  - Textarea for long-lived token
+  - Submit → POST `/api/auth/token`
+  - Back link to LoginPage
+
+- [ ] `useAuthStatus.ts` hook
+  - Poll `GET /api/auth/status` every 5s
+  - Returns `{ status, isLoading, error }`
+  - App.tsx uses this to switch between pages
+
+### Build Integration
+
+- [ ] `ui/package.json` — scripts: `dev`, `build`, `preview`
+- [ ] `ui/vite.config.ts`
+  - `base: "/"`, `outDir: "dist"`
+  - Dev proxy: `/api/*` → `http://localhost:3000` (for `bun run dev`)
+- [ ] `Dockerfile` — add `bun run build` step inside `ui/`
+- [ ] `src/index.ts` — serve `ui/dist/` for all non-API, non-webhook routes
+  - `GET /api/*` → JSON API handlers
+  - `POST /webhook` → webhook handler
+  - `GET /health` → health check JSON
+  - Everything else → serve `ui/dist/index.html` (SPA fallback)
 
 ## Phase 12: HTTP Server
 
 - [ ] `src/index.ts` — `Bun.serve()` entrypoint
   - Route dispatch (manual, no framework):
-    - Web UI routes (nginx-protected in production, all on same port):
-      - `GET /` → auth status → status page or redirect `/login`
-      - `GET /login` → `auth.startLogin()` → login page
-      - `POST /login` → `auth.submitAuthCode()` → redirect `/`
-      - `GET /setup-token` → setup token page
-      - `POST /setup-token` → `auth.setupToken()` → redirect `/`
-      - `POST /logout` → `auth.logout()` → redirect `/`
-    - API routes:
+    - JSON API routes (nginx-protected):
+      - `GET  /api/auth/status`  → `auth.getAuthStatus()` → JSON
+      - `POST /api/auth/login`   → `auth.startLogin()` → `{ oauthUrl }`
+      - `POST /api/auth/code`    → `auth.submitAuthCode(code)` → `{ ok }`
+      - `POST /api/auth/token`   → `auth.setupToken(token)` → `{ ok }`
+      - `POST /api/auth/logout`  → `auth.logout()` → `{ ok }`
+    - Webhook + health:
       - `POST /webhook` → `webhook.handle()`
-      - `GET /health` → JSON `{ status: "ok", queue: { active, pending } }`
+      - `GET  /health`  → `{ status: "ok", queue: { active, pending } }`
+    - SPA static files:
+      - Serve `ui/dist/` for all other GET requests
+      - Fallback to `ui/dist/index.html` for SPA routing
     - `404` for everything else
   - Body parsing for form submissions (`application/x-www-form-urlencoded`)
   - Startup:

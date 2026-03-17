@@ -34,18 +34,36 @@ su-47/
 │   ├── architecture.md   # Full architecture + flow diagrams
 │   └── tasks.md          # Phase-by-phase implementation checklist
 ├── src/
-│   ├── index.ts          # Bun.serve() entrypoint + routing
+│   ├── index.ts          # Bun.serve() entrypoint — API routes + static SPA
 │   ├── config.ts         # Env vars + su-47.config.json loader (hot-reload)
 │   ├── types.ts          # All TypeScript interfaces + label-based model selection
 │   ├── webhook.ts        # HMAC validation + issue/comment event routing
 │   ├── queue.ts          # In-memory concurrent job queue
 │   ├── worker.ts         # Job processor (spawns runner.ts)
 │   ├── cancel.ts         # SIGTERM → 10s → SIGKILL + Plane state update
-│   ├── plane.ts          # Plane REST API client (retry, cache)
+│   ├── plane.ts          # Plane REST API client (retry, cache, marked for HTML)
 │   ├── prompt.ts         # Prompt + Plane comment builders
-│   ├── auth.ts           # Claude CLI OAuth web UI (spawn, parse URL, pipe code)
-│   ├── pages.ts          # HTML page generators (no template engine, inline CSS)
+│   ├── auth.ts           # Claude CLI OAuth integration (spawn, parse URL, pipe code)
 │   └── runner.ts         # Subprocess: git, claude agent, commit, PR, result.json
+├── ui/                   # React SPA (Vite + shadcn/ui + Tailwind)
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx       # Root + routing (react-router-dom)
+│   │   ├── lib/
+│   │   │   ├── api.ts    # fetch wrappers for /api/* endpoints
+│   │   │   └── utils.ts  # cn() shadcn utility
+│   │   ├── components/ui/  # shadcn generated components
+│   │   ├── pages/
+│   │   │   ├── StatusPage.tsx      # Auth status + logout
+│   │   │   ├── LoginPage.tsx       # OAuth URL + code input
+│   │   │   └── SetupTokenPage.tsx  # Long-lived token input
+│   │   └── hooks/
+│   │       └── useAuthStatus.ts    # Poll /api/auth/status every 5s
+│   ├── index.html
+│   ├── vite.config.ts    # proxy /api/* → :3000 in dev
+│   ├── tailwind.config.ts
+│   └── package.json
+└── ui/dist/              # Built SPA (served statically by Bun.serve())
 ├── biome.json
 ├── Dockerfile            # oven/bun:1-slim + gh + claude CLI
 ├── docker-compose.yml
@@ -61,16 +79,16 @@ su-47/
 
 ## HTTP Routes
 
-| Method | Path           | Auth     | Purpose                                        |
-|--------|----------------|----------|------------------------------------------------|
-| GET    | `/`            | nginx    | Auth status → session info or redirect /login  |
-| GET    | `/login`       | nginx    | Spawn `claude auth login`, show OAuth URL      |
-| POST   | `/login`       | nginx    | Pipe auth code to subprocess stdin             |
-| GET    | `/setup-token` | nginx    | Long-lived token input page (alternative)      |
-| POST   | `/setup-token` | nginx    | Pipe token to `claude setup-token` stdin       |
-| POST   | `/logout`      | nginx    | Run `claude auth logout`                       |
-| POST   | `/webhook`     | HMAC     | Plane webhook (issue updated + comment created)|
-| GET    | `/health`      | none     | `{ status: "ok", queue: { active, pending } }` |
+| Method | Path                | Auth  | Purpose                                        |
+|--------|---------------------|-------|------------------------------------------------|
+| GET    | `/api/auth/status`  | nginx | `AuthStatus` JSON                              |
+| POST   | `/api/auth/login`   | nginx | Spawn `claude auth login` → `{ oauthUrl }`     |
+| POST   | `/api/auth/code`    | nginx | Submit OAuth code → `{ ok: true }`             |
+| POST   | `/api/auth/token`   | nginx | Submit long-lived token → `{ ok: true }`       |
+| POST   | `/api/auth/logout`  | nginx | Run `claude auth logout` → `{ ok: true }`      |
+| POST   | `/webhook`          | HMAC  | Plane webhook (issue updated + comment created)|
+| GET    | `/health`           | none  | `{ status: "ok", queue: { active, pending } }` |
+| GET    | `/*`                | nginx | Serve `ui/dist/` SPA (fallback to index.html)  |
 
 ---
 
