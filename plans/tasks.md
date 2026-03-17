@@ -40,13 +40,17 @@
     - `process: ReturnType<typeof Bun.spawn>`, `oauthUrl: string`
     - `createdAt: number`, `timeoutId: ReturnType<typeof setTimeout>`
   - `PlaneLabel`, `PlaneIssue`, `PlaneState`, `PlaneComment`, `PlaneWebhookPayload`
-  - `SukhoiConfig`, `RoutingRule`, `ClassifierConfig`, `WorklogConfig`, `StateNames`
+  - `SukhoiConfig`, `WorklogConfig`, `StateNames`
   - `Job` — `{ id: string, issueId: string, projectId: string, process: BunSubProcess, signal: AbortController }`
   - `RunnerResult`, `RunnerUsage`
-  - `Complexity` — `string` (user-defined keys from config)
+  - `ModelLabel` — `"opus" | "sonnet" | "haiku"` (hardcoded valid labels)
+  - `MODEL_IDS` — const mapping label → full model ID
+  - `DEFAULT_MODEL` — `"sonnet"` (fallback when no label matches)
+  - `resolveModelFromLabels(labels)` — determine model from issue labels
 - [x] `src/config.ts` — Config loader
   - Load + validate env vars (throw early with clear error if missing required)
-  - Load + validate `su-47.config.json` (same schema as `sukhoi.config.json`)
+  - Load + validate `su-47.config.json` (simplified schema, no routing/classifier)
+  - Required fields: `repo`, `baseBranch`, `prompt`, `states`, `worklog`
   - Export typed `config` and `env` objects
   - `watchConfig(onChange)` — `fs.watch` for hot-reload
   - Env vars: `PORT`, `PLANE_API_KEY`, `PLANE_BASE_URL`, `PLANE_WORKSPACE_SLUG`,
@@ -107,27 +111,24 @@
     - Job not found → post comment: "No active job found for this issue"
     - Job already finished (race condition) → ignore gracefully
 
-## Phase 7: Model Router + Classifier
+## Phase 7: Model Selection (Label-Based)
 
-- [ ] `src/router.ts` — Config-driven model routing
-  - Evaluate routing rules top-down (first match wins)
-  - Match conditions (AND between types, OR within each):
-    - `priority`: issue priority in list
-    - `labels`: issue has at least one matching label
-    - `complexity`: classifier output in list
-  - Classifier invoked lazily (only when a rule needs `complexity` and cache the response for later rules.
-  - Returns `{ model: string, reason: string }`
-- [ ] `src/classifier.ts` — LLM complexity classifier
-  - Spawn `claude -p --model $MODEL "$PROMPT"` with structured JSON prompt
-  - Parse response: `{ result: string, reason: string }`
-  - Returns `Complexity` string matching config keys
+- [x] Label-based model selection (implemented in `src/types.ts`)
+  - No separate router or classifier needed
+  - Accepts labels: `opus`, `sonnet`, `haiku` (case insensitive)
+  - If no matching label found, defaults to `sonnet`
+  - `resolveModelFromLabels(labels)` returns `{ label, modelId }`
+  - Model IDs hardcoded:
+    - `opus` → `claude-opus-4-5`
+    - `sonnet` → `claude-sonnet-4-20250514`
+    - `haiku` → `claude-haiku-4-20250514`
 
 ## Phase 8: Prompt Builder
 
 - [ ] `src/prompt.ts` — Prompt construction
   - `buildPrompt(config, issue)` — combine system prompt + task context
     - Title, description, labels, priority, parent issue
-  - `buildRoutingComment(model, reason)` — Plane comment for routing decision
+  - `buildModelComment(label, modelId)` — Plane comment for model selection
   - `buildCompletionComment(result)` — Plane comment with PR link, cost, tokens
   - `buildQueuedComment(position)` — initial queued notification
   - `buildCancelledComment()` — cancellation confirmation
@@ -162,8 +163,8 @@
   - `processJob(job)`:
     1. Fetch issue from Plane API
     2. Update state → "In Progress"
-    3. Route model (`router.routeModel(issue)`)
-    4. Post routing comment
+    3. Resolve model from labels (`resolveModelFromLabels(issue.label_details)`)
+    4. Post model selection comment
     5. Build prompt
     6. Spawn `bun run src/runner.ts` with all env vars
     7. Store subprocess ref in job (for cancel)
@@ -334,34 +335,13 @@ if (payload.event === "comment" && payload.action === "created") {
 
 ### Config File Schema (su-47.config.json)
 
-Same as sukhoi's `sukhoi.config.json`. Example:
+Simplified config — model selection is now label-based (no routing rules needed).
 
 ```json
 {
   "repo": "https://github.com/org/repo.git",
   "baseBranch": "main",
   "prompt": "You are an expert software engineer...",
-  "classifier": {
-    "enabled": true,
-    "model": "claude-haiku-4-20250514",
-    "complexity": {
-      "simple": "Small, well-defined changes (< 50 lines)",
-      "moderate": "Multi-file changes requiring understanding of context",
-      "complex": "Architecture changes, new systems, > 200 lines"
-    }
-  },
-  "models": {
-    "haiku": "claude-haiku-4-20250514",
-    "sonnet": "claude-sonnet-4-20250514",
-    "opus": "claude-opus-4-5"
-  },
-  "routing": [
-    { "priority": ["urgent"], "model": "opus" },
-    { "labels": ["quick-fix"], "model": "haiku" },
-    { "complexity": ["simple"], "model": "haiku" },
-    { "complexity": ["moderate"], "model": "sonnet" }
-  ],
-  "defaultModel": "sonnet",
   "states": {
     "todo": "Todo",
     "inProgress": "In Progress",
@@ -374,3 +354,11 @@ Same as sukhoi's `sukhoi.config.json`. Example:
   }
 }
 ```
+
+### Model Selection
+
+Model is determined by issue labels (case insensitive):
+- Label `opus` → `claude-opus-4-5`
+- Label `sonnet` → `claude-sonnet-4-20250514`
+- Label `haiku` → `claude-haiku-4-20250514`
+- No matching label → defaults to `sonnet`

@@ -68,17 +68,7 @@ function parseConfig(raw: string): SukhoiConfig {
   const cfg = parsed as Partial<SukhoiConfig>;
 
   // Validate required fields
-  const required: (keyof SukhoiConfig)[] = [
-    "repo",
-    "baseBranch",
-    "prompt",
-    "classifier",
-    "models",
-    "routing",
-    "defaultModel",
-    "states",
-    "worklog",
-  ];
+  const required: (keyof SukhoiConfig)[] = ["repo", "baseBranch", "prompt", "states", "worklog"];
   for (const key of required) {
     if (cfg[key] === undefined) {
       throw new Error(`su-47.config.json missing required field: "${key}"`);

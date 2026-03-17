@@ -91,16 +91,18 @@ export interface PlaneWebhookPayload {
 // Application Config (su-47.config.json)
 // ---------------------------------------------------------------------------
 
-/** Complexity keys are user-defined strings from config (e.g. "simple", "moderate", "complex") */
-export type Complexity = string;
+/** Valid model labels (case insensitive) */
+export type ModelLabel = "opus" | "sonnet" | "haiku";
 
-export interface ClassifierConfig {
-  enabled: boolean;
-  /** Model alias (key in `models`) used for classification */
-  model: string;
-  /** Map of complexity key → description shown to the classifier LLM */
-  complexity: Record<Complexity, string>;
-}
+/** Full model IDs for each label */
+export const MODEL_IDS: Record<ModelLabel, string> = {
+  opus: "claude-opus-4-5",
+  sonnet: "claude-sonnet-4-20250514",
+  haiku: "claude-haiku-4-20250514",
+};
+
+/** Default model when no label matches */
+export const DEFAULT_MODEL: ModelLabel = "sonnet";
 
 export interface WorklogConfig {
   enabled: boolean;
@@ -115,17 +117,6 @@ export interface StateNames {
   failed: string;
 }
 
-export interface RoutingRule {
-  /** Match if issue priority is in this list */
-  priority?: string[];
-  /** Match if issue has at least one label in this list */
-  labels?: string[];
-  /** Match if classifier output is in this list */
-  complexity?: Complexity[];
-  /** Model alias to use when this rule matches */
-  model: string;
-}
-
 export interface SukhoiConfig {
   /** Git clone URL of the target repository */
   repo: string;
@@ -133,18 +124,30 @@ export interface SukhoiConfig {
   baseBranch: string;
   /** System prompt for the AI coding agent */
   prompt: string;
-  /** LLM complexity classifier settings */
-  classifier: ClassifierConfig;
-  /** Map of model alias → full model ID */
-  models: Record<string, string>;
-  /** Ordered routing rules (first match wins) */
-  routing: RoutingRule[];
-  /** Fallback model alias when no rule matches */
-  defaultModel: string;
   /** Plane state name mapping */
   states: StateNames;
   /** Worklog settings */
   worklog: WorklogConfig;
+}
+
+/**
+ * Determine which model to use based on issue labels.
+ * Accepts labels: opus, sonnet, haiku (case insensitive).
+ * If no matching label found, defaults to sonnet.
+ */
+export function resolveModelFromLabels(labels: PlaneLabel[]): {
+  label: ModelLabel;
+  modelId: string;
+} {
+  const labelNames = labels.map((l) => l.name.toLowerCase());
+
+  for (const modelLabel of ["opus", "sonnet", "haiku"] as const) {
+    if (labelNames.includes(modelLabel)) {
+      return { label: modelLabel, modelId: MODEL_IDS[modelLabel] };
+    }
+  }
+
+  return { label: DEFAULT_MODEL, modelId: MODEL_IDS[DEFAULT_MODEL] };
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 su-47 is a full rewrite of [sukhoi](https://github.com/tigorlazuardi/sukhoi): an autonomous coding
 agent that bridges Plane (project management) with Claude Code CLI. When a Plane issue moves to
-"Todo", su-47 classifies complexity, picks a model, spawns a runner that implements the task, opens
+"Todo", su-47 picks a model based on issue labels, spawns a runner that implements the task, opens
 a GitHub PR, and updates the issue. A Plane comment `/cancel` kills the active runner subprocess.
 
 For full architecture and flow diagrams see `plans/architecture.md`.
@@ -36,13 +36,11 @@ su-47/
 ├── src/
 │   ├── index.ts          # Bun.serve() entrypoint + routing
 │   ├── config.ts         # Env vars + su-47.config.json loader (hot-reload)
-│   ├── types.ts          # All TypeScript interfaces (single source of truth)
+│   ├── types.ts          # All TypeScript interfaces + label-based model selection
 │   ├── webhook.ts        # HMAC validation + issue/comment event routing
 │   ├── queue.ts          # In-memory concurrent job queue
 │   ├── worker.ts         # Job processor (spawns runner.ts)
 │   ├── cancel.ts         # SIGTERM → 10s → SIGKILL + Plane state update
-│   ├── router.ts         # Config-driven model routing (rules, first-match-wins)
-│   ├── classifier.ts     # LLM complexity classifier (lazy, only when needed)
 │   ├── plane.ts          # Plane REST API client (retry, cache)
 │   ├── prompt.ts         # Prompt + Plane comment builders
 │   ├── auth.ts           # Claude CLI OAuth web UI (spawn, parse URL, pipe code)
@@ -103,27 +101,6 @@ Hot-reloaded at runtime via file watch. Never commit this file (contains repo UR
   "repo": "https://github.com/org/repo.git",  // Git clone URL
   "baseBranch": "main",
   "prompt": "You are an expert software engineer...",
-  "classifier": {
-    "enabled": true,
-    "model": "haiku",                          // model alias (see models below)
-    "complexity": {
-      "simple": "< 50 lines, single file",
-      "moderate": "multi-file, needs context",
-      "complex": "architecture changes, > 200 lines"
-    }
-  },
-  "models": {
-    "haiku":  "claude-haiku-4-20250514",
-    "sonnet": "claude-sonnet-4-20250514",
-    "opus":   "claude-opus-4-5"
-  },
-  "routing": [                                 // first-match-wins
-    { "priority": ["urgent"], "model": "opus" },
-    { "labels": ["quick-fix"], "model": "haiku" },
-    { "complexity": ["simple"], "model": "haiku" },
-    { "complexity": ["moderate"], "model": "sonnet" }
-  ],
-  "defaultModel": "sonnet",
   "states": {
     "todo":       "Todo",
     "inProgress": "In Progress",
@@ -132,6 +109,29 @@ Hot-reloaded at runtime via file watch. Never commit this file (contains repo UR
   },
   "worklog": { "enabled": true, "maxEntries": 10 }
 }
+```
+
+---
+
+## Model Selection (Label-Based)
+
+Model is determined by issue labels (case insensitive). No config needed.
+
+| Label    | Model ID                      |
+|----------|-------------------------------|
+| `opus`   | `claude-opus-4-5`             |
+| `sonnet` | `claude-sonnet-4-20250514`    |
+| `haiku`  | `claude-haiku-4-20250514`     |
+
+If no matching label is found, defaults to **sonnet**.
+
+```typescript
+// Usage in worker.ts
+import { resolveModelFromLabels } from "./types";
+
+const { label, modelId } = resolveModelFromLabels(issue.label_details ?? []);
+// label: "opus" | "sonnet" | "haiku"
+// modelId: full model identifier string
 ```
 
 ---
