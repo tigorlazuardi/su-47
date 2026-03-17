@@ -33,7 +33,7 @@
 
 ## Phase 2: Core Types & Config
 
-- [ ] `src/types.ts` — All TypeScript interfaces (centralized)
+- [x] `src/types.ts` — All TypeScript interfaces (centralized)
   - `AuthStatus` — output of `claude auth status --json`
     - `loggedIn: boolean`, `authMethod`, `email`, `orgId`, `orgName`, `subscriptionType`
   - `LoginSession` — active OAuth login subprocess
@@ -44,7 +44,7 @@
   - `Job` — `{ id: string, issueId: string, projectId: string, process: BunSubProcess, signal: AbortController }`
   - `RunnerResult`, `RunnerUsage`
   - `Complexity` — `string` (user-defined keys from config)
-- [ ] `src/config.ts` — Config loader
+- [x] `src/config.ts` — Config loader
   - Load + validate env vars (throw early with clear error if missing required)
   - Load + validate `su-47.config.json` (same schema as `sukhoi.config.json`)
   - Export typed `config` and `env` objects
