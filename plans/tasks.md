@@ -183,7 +183,7 @@
 
 ## Phase 11: Auth Backend (src/auth.ts)
 
-- [ ] `src/auth.ts` — Claude CLI OAuth integration
+- [x] `src/auth.ts` — Claude CLI OAuth integration
   - `getAuthStatus()` — run `claude auth status --json`, parse output
   - `startLogin()` — spawn `claude auth login`
     - Set `TERM=dumb` to disable TUI
@@ -263,12 +263,13 @@ ui/
 
 ### Build Integration
 
-- [ ] `ui/package.json` — scripts: `dev`, `build`, `preview`
-- [ ] `ui/vite.config.ts`
+- [x] `ui/package.json` — scripts: `dev`, `build`, `preview`
+- [x] `ui/vite.config.ts`
   - `base: "/"`, `outDir: "dist"`
-  - Dev proxy: `/api/*` → `http://localhost:3000` (for `bun run dev`)
-- [ ] `Dockerfile` — add `bun run build` step inside `ui/`
-- [ ] `src/index.ts` — serve `ui/dist/` for all non-API, non-webhook routes
+  - Dev proxy: `/api/*`, `/webhook`, `/health` → `http://localhost:3000`
+  - Path alias: `@/` → `./src/`
+- [x] `Dockerfile` — multi-stage: server-deps + ui-build + final
+- [x] `src/index.ts` — serve `ui/dist/` for all non-API, non-webhook routes
   - `GET /api/*` → JSON API handlers
   - `POST /webhook` → webhook handler
   - `GET /health` → health check JSON
@@ -276,7 +277,7 @@ ui/
 
 ## Phase 12: HTTP Server
 
-- [ ] `src/index.ts` — `Bun.serve()` entrypoint
+- [x] `src/index.ts` — `Bun.serve()` entrypoint
   - Route dispatch (manual, no framework):
     - JSON API routes (nginx-protected):
       - `GET  /api/auth/status`  → `auth.getAuthStatus()` → JSON
@@ -290,6 +291,8 @@ ui/
     - SPA static files:
       - Serve `ui/dist/` for all other GET requests
       - Fallback to `ui/dist/index.html` for SPA routing
+  - Startup: resolve Plane state UUIDs, wire up queue processor + webhook handler
+  - Graceful shutdown: `SIGTERM`/`SIGINT` → kill queue, kill login session, stop server
     - `404` for everything else
   - Body parsing for form submissions (`application/x-www-form-urlencoded`)
   - Startup:
