@@ -72,22 +72,27 @@
 
 ## Phase 4: Job Queue
 
-- [ ] `src/queue.ts` — In-memory concurrent job queue
+- [x] `src/queue.ts` — In-memory concurrent job queue
   - Configurable concurrency (from `CONCURRENCY` env, default 1)
   - UUID-based job IDs (via `crypto.randomUUID()`)
   - Each job has an `AbortController`
   - Store active job `BunSubProcess` reference for cancel
-  - `enqueue(job)` — add job, start if slot available
+  - `enqueue(issueId, projectId)` — add job, start if slot available, returns job ID
   - `findActiveByIssueId(issueId)` — look up running job by Plane issue ID
+  - `findPendingByIssueId(issueId)` — look up pending job by Plane issue ID
+  - `hasIssue(issueId)` — check if issue is already queued
+  - `setProcess(jobId, proc)` — store subprocess ref after spawn
   - `killActive()` — graceful shutdown (SIGTERM all active, drop pending)
+  - `cancelJob(jobId)` — cancel specific job by ID
+  - `cancelByIssueId(issueId)` — cancel job by issue ID
   - Auto-drains: starts next job when slot opens
   - `status()` — returns `{ active: number, pending: number }` for health check
 
 ## Phase 5: Webhook Handler
 
-- [ ] `src/webhook.ts` — Webhook processing
+- [x] `src/webhook.ts` — Webhook processing
   - HMAC-SHA256 signature verification (`X-Plane-Signature` header)
-    - Use `crypto.timingSafeEqual` to prevent timing attacks
+    - Use timing-safe comparison to prevent timing attacks
     - Raw body for signature computation (read before parsing)
   - Respond `200 OK` immediately, process async
   - Event routing:
@@ -95,21 +100,20 @@
     - `event === "comment" && action === "created"` → check body for `/cancel` → cancel flow
   - Issue event: filter by `state.id === todoStateId` (resolved at startup)
   - Comment event: `body.trim().startsWith("/cancel")`
+  - Check if issue already queued before enqueuing
 
 ## Phase 6: Cancel Logic
 
-- [ ] `src/cancel.ts` — Cancel a running job
-  - `cancelJob(job: Job)`:
-    1. `job.process.kill("SIGTERM")`
-    2. Start 10-second timeout to send `SIGKILL`
-    3. `await job.process.exited`
-    4. `clearTimeout(timeout)` on exit
+- [x] `src/cancel.ts` — Cancel a running job
+  - `cancelJob(issueId, projectId, ctx)`:
+    1. Find job by issue ID (active or pending)
+    2. Cancel via `queue.cancelByIssueId()`
+    3. Queue handles SIGTERM → 10s → SIGKILL
   - After cancellation:
     - Update Plane issue state → "Cancelled"
     - Post comment: "Job cancelled by /cancel command"
   - Edge cases:
     - Job not found → post comment: "No active job found for this issue"
-    - Job already finished (race condition) → ignore gracefully
 
 ## Phase 7: Model Selection (Label-Based)
 
@@ -125,42 +129,42 @@
 
 ## Phase 8: Prompt Builder
 
-- [ ] `src/prompt.ts` — Prompt construction
+- [x] `src/prompt.ts` — Prompt construction
   - `buildPrompt(config, issue)` — combine system prompt + task context
-    - Title, description, labels, priority, parent issue
+    - Title, description, labels, priority, state
   - `buildModelComment(label, modelId)` — Plane comment for model selection
   - `buildCompletionComment(result)` — Plane comment with PR link, cost, tokens
   - `buildQueuedComment(position)` — initial queued notification
   - `buildCancelledComment()` — cancellation confirmation
+  - `buildTimeoutComment(timeoutMs)` — timeout notification
 
 ## Phase 9: Runner
 
-- [ ] `src/runner.ts` — Coding agent subprocess (run by `bun run src/runner.ts`)
+- [x] `src/runner.ts` — Coding agent subprocess (run by `bun run src/runner.ts`)
   - Receives all context via environment variables (set by worker)
   - Steps:
-    1. **Authenticate GitHub** — `gh auth login` (if `GITHUB_TOKEN` is set, use `gh auth login --with-token`)
+    1. **Authenticate GitHub** — `gh auth login --with-token` (pipe GITHUB_TOKEN)
     2. **Configure git identity** — `git config user.name/email`
     3. **Manage repo cache** (`REPO_CACHE_DIR`):
        - Fresh clone if cache empty
        - `git fetch + reset --hard` if cache exists
        - Destroy and re-clone on conflicts
     4. **Create git worktree** — branch name: `fix/{project-slug}-{sequence}`
-    5. **Install dependencies** — `bun install --frozen-lockfile` (or pnpm, detected from lockfile)
-    6. **Inject worklog** (if enabled) — prepend recent task history to prompt
-    7. **Run claude agent** — `claude -p --model $MODEL --output-format stream-json "$PROMPT"`
-    8. **Parse usage** — extract cost/tokens from stream-json output
-    9. **Commit changes** — `git add -A && git commit -m "..."`
+    5. **Install dependencies** — detect lockfile (bun/pnpm/yarn/npm) and install
+    6. **Run claude agent** — `claude -p --model $MODEL --output-format stream-json "$PROMPT"`
+    7. **Parse usage** — extract cost/tokens from stream-json output
+    8. **Check for changes** — `git status --porcelain`
+    9. **Commit changes** — `git add -A && git commit -m "fix: {slug}-{seq}"`
     10. **Push + create PR** — `gh pr create --base $BASE_BRANCH`
-    11. **Update worklog** (if enabled) — append entry, cap at max
-    12. **Cleanup worktree** — `git worktree remove`
-    13. **Write `result.json`** — `{ prUrl, commitUrl, commitSha, usage, skipped }`
+    11. **Cleanup worktree** — `git worktree remove --force`
+    12. **Write `result.json`** — `{ prUrl, commitUrl, commitSha, usage, skipped }`
   - Handle "no changes" case (`skipped: true`)
-  - Write runner log to file for error reporting
+  - All errors caught and written to `result.json` error field
 
 ## Phase 10: Worker
 
-- [ ] `src/worker.ts` — Job processor
-  - `processJob(job)`:
+- [x] `src/worker.ts` — Job processor
+  - `processJob(job, ctx)`:
     1. Fetch issue from Plane API
     2. Update state → "In Progress"
     3. Resolve model from labels (`resolveModelFromLabels(issue.label_details)`)
@@ -172,6 +176,9 @@
     9. Read `result.json`
     10. Update state → "Review/Testing" (success) or "Cancelled" (failure/timeout)
     11. Post completion comment
+  - Handle timeout: kill subprocess, update state, post timeout comment
+  - Handle errors: update state, post error comment
+  - Clean up result.json after reading
 
 ## Phase 11: Auth Web UI
 
