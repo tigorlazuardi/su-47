@@ -2,7 +2,7 @@
  * prompt.ts — Prompt construction for the coding agent and Plane comments.
  */
 
-import type { ModelLabel, PlaneIssue, RunnerResult, SukhoiConfig } from "./types";
+import type { PlaneIssue, RunnerResult, SukhoiConfig } from "./types";
 
 // ---------------------------------------------------------------------------
 // Agent Prompt
@@ -63,8 +63,8 @@ export function buildPrompt(config: SukhoiConfig, issue: PlaneIssue): string {
 /**
  * Build a comment for model selection.
  */
-export function buildModelComment(label: ModelLabel, modelId: string): string {
-  return `🤖 **Model selected:** \`${label}\` (\`${modelId}\`)\n\nStarting work...`;
+export function buildModelComment(model: string): string {
+  return `🤖 **Model selected:** \`${model}\`\n\nStarting work...`;
 }
 
 /**

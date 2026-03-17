@@ -115,24 +115,25 @@ Hot-reloaded at runtime via file watch. Never commit this file (contains repo UR
 
 ## Model Selection (Label-Based)
 
-Model is determined by issue labels (case insensitive). No config needed.
+Model is determined by issue labels containing `opus`, `sonnet`, or `haiku` (case insensitive).
+The full label name is passed to `claude --model <label>`.
 
-| Label    | Model ID                      |
-|----------|-------------------------------|
-| `opus`   | `claude-opus-4-5`             |
-| `sonnet` | `claude-sonnet-4-20250514`    |
-| `haiku`  | `claude-haiku-4-20250514`     |
-
-If no matching label is found, defaults to **sonnet**.
+**Examples:**
+- Label `sonnet` → `claude --model sonnet` (uses latest sonnet)
+- Label `sonnet-4-5` → `claude --model sonnet-4-5` (specific version)
+- Label `opus` → `claude --model opus`
+- Label `haiku` → `claude --model haiku`
+- No matching label → defaults to `sonnet`
 
 ```typescript
 // Usage in worker.ts
 import { resolveModelFromLabels } from "./types";
 
-const { label, modelId } = resolveModelFromLabels(issue.label_details ?? []);
-// label: "opus" | "sonnet" | "haiku"
-// modelId: full model identifier string
+const model = resolveModelFromLabels(issue.label_details ?? []);
+// model: string (e.g., "sonnet", "sonnet-4-5", "opus")
 ```
+
+This design allows version overrides via label names (e.g., `sonnet-4-5`) while defaulting to the latest version when using base labels (e.g., `sonnet`).
 
 ---
 

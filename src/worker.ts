@@ -59,11 +59,11 @@ export async function processJob(job: Job, ctx: WorkerContext): Promise<void> {
     await ctx.plane.updateIssueState(job.projectId, job.issueId, ctx.inProgressStateId);
 
     // 3. Resolve model from labels
-    const { label, modelId } = resolveModelFromLabels(issue.label_details ?? []);
-    console.log(`[worker] Selected model: ${label} (${modelId})`);
+    const model = resolveModelFromLabels(issue.label_details ?? []);
+    console.log(`[worker] Selected model: ${model}`);
 
     // 4. Post model selection comment
-    await ctx.plane.addComment(job.projectId, job.issueId, buildModelComment(label, modelId));
+    await ctx.plane.addComment(job.projectId, job.issueId, buildModelComment(model));
 
     // 5. Build prompt
     const prompt = buildPrompt(ctx.config, issue);
@@ -79,7 +79,7 @@ export async function processJob(job: Job, ctx: WorkerContext): Promise<void> {
         ...process.env,
         ISSUE_ID: job.issueId,
         PROJECT_ID: job.projectId,
-        MODEL: modelId,
+        MODEL: model,
         PROMPT: prompt,
         REPO: ctx.config.repo,
         BASE_BRANCH: ctx.config.baseBranch,

@@ -119,13 +119,14 @@
 
 - [x] Label-based model selection (implemented in `src/types.ts`)
   - No separate router or classifier needed
-  - Accepts labels: `opus`, `sonnet`, `haiku` (case insensitive)
+  - Searches for labels containing `opus`, `sonnet`, or `haiku` (case insensitive)
+  - Returns full label name for `claude --model <label>` command
   - If no matching label found, defaults to `sonnet`
-  - `resolveModelFromLabels(labels)` returns `{ label, modelId }`
-  - Model IDs hardcoded:
-    - `opus` → `claude-opus-4-5`
-    - `sonnet` → `claude-sonnet-4-20250514`
-    - `haiku` → `claude-haiku-4-20250514`
+  - `resolveModelFromLabels(labels)` returns `string` (label name)
+  - Supports version overrides:
+    - Label `sonnet` → `claude --model sonnet` (latest version)
+    - Label `sonnet-4-5` → `claude --model sonnet-4-5` (specific version)
+    - Label `opus` → `claude --model opus`
 
 ## Phase 8: Prompt Builder
 
@@ -364,8 +365,10 @@ Simplified config — model selection is now label-based (no routing rules neede
 
 ### Model Selection
 
-Model is determined by issue labels (case insensitive):
-- Label `opus` → `claude-opus-4-5`
-- Label `sonnet` → `claude-sonnet-4-20250514`
-- Label `haiku` → `claude-haiku-4-20250514`
+Model is determined by searching for labels containing "opus", "sonnet", or "haiku" (case insensitive).
+The full label name is used with `claude --model <label>`:
+- Label `sonnet` → `claude --model sonnet` (latest version)
+- Label `sonnet-4-5` → `claude --model sonnet-4-5` (specific version override)
+- Label `opus` → `claude --model opus`
+- Label `haiku` → `claude --model haiku`
 - No matching label → defaults to `sonnet`

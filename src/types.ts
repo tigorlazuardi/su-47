@@ -91,19 +91,6 @@ export interface PlaneWebhookPayload {
 // Application Config (su-47.config.json)
 // ---------------------------------------------------------------------------
 
-/** Valid model labels (case insensitive) */
-export type ModelLabel = "opus" | "sonnet" | "haiku";
-
-/** Full model IDs for each label */
-export const MODEL_IDS: Record<ModelLabel, string> = {
-  opus: "claude-opus-4-5",
-  sonnet: "claude-sonnet-4-20250514",
-  haiku: "claude-haiku-4-20250514",
-};
-
-/** Default model when no label matches */
-export const DEFAULT_MODEL: ModelLabel = "sonnet";
-
 export interface WorklogConfig {
   enabled: boolean;
   /** Maximum number of worklog entries to prepend to the prompt */
@@ -132,22 +119,31 @@ export interface SukhoiConfig {
 
 /**
  * Determine which model to use based on issue labels.
- * Accepts labels: opus, sonnet, haiku (case insensitive).
- * If no matching label found, defaults to sonnet.
+ *
+ * Searches for labels containing "opus", "sonnet", or "haiku" (case insensitive).
+ * Returns the full label name to use with `claude --model <label>`.
+ *
+ * Examples:
+ * - Label "sonnet" → model "sonnet"
+ * - Label "sonnet-4-5" → model "sonnet-4-5"
+ * - Label "opus" → model "opus"
+ * - No matching label → defaults to "sonnet"
+ *
+ * @returns The label name to use as model (defaults to "sonnet")
  */
-export function resolveModelFromLabels(labels: PlaneLabel[]): {
-  label: ModelLabel;
-  modelId: string;
-} {
-  const labelNames = labels.map((l) => l.name.toLowerCase());
+export function resolveModelFromLabels(labels: PlaneLabel[]): string {
+  const modelKeywords = ["opus", "sonnet", "haiku"];
 
-  for (const modelLabel of ["opus", "sonnet", "haiku"] as const) {
-    if (labelNames.includes(modelLabel)) {
-      return { label: modelLabel, modelId: MODEL_IDS[modelLabel] };
+  for (const label of labels) {
+    const lowerName = label.name.toLowerCase();
+    for (const keyword of modelKeywords) {
+      if (lowerName.includes(keyword)) {
+        return label.name;
+      }
     }
   }
 
-  return { label: DEFAULT_MODEL, modelId: MODEL_IDS[DEFAULT_MODEL] };
+  return "sonnet";
 }
 
 // ---------------------------------------------------------------------------
