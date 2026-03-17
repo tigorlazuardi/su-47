@@ -24,5 +24,8 @@
     "*.ts": [
       "biome check --write --no-errors-on-unmatched"
     ]
+  },
+  "dependencies": {
+    "marked": "^17.0.4"
   }
 }

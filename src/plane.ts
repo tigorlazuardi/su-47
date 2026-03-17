@@ -2,6 +2,7 @@
  * plane.ts — Plane REST API client with retry and in-memory cache.
  */
 
+import { marked } from "marked";
 import type { Env } from "./config";
 import type { PlaneComment, PlaneIssue, PlaneState } from "./types";
 
@@ -16,101 +17,7 @@ function sleep(ms: number): Promise<void> {
 
 /** Convert a markdown string to HTML rich text suitable for Plane comments. */
 function markdownToHtml(markdown: string): string {
-  // Plane uses TipTap/ProseMirror for rich text editing
-  let html = markdown;
-
-  // Process code blocks first (``` ... ```)
-  html = html.replace(/```([^\n]*)\n([\s\S]*?)```/g, (_match, _lang, code) => {
-    // Escape HTML in code block
-    const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    return `<pre><code>${escaped}</code></pre>`;
-  });
-
-  // Escape HTML special chars in non-code sections
-  // Split by <pre> tags to avoid escaping code blocks
-  const parts = html.split(/(<pre>[\s\S]*?<\/pre>)/);
-  html = parts
-    .map((part, i) => {
-      if (i % 2 === 1) return part; // Keep code blocks as-is
-      return part.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    })
-    .join("");
-
-  // Bold: **text** or __text__
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
-
-  // Italic: *text* or _text_ (but not in URLs or already processed)
-  html = html.replace(/(?<!\*)\*([^*\s][^*]*?)\*(?!\*)/g, "<em>$1</em>");
-  html = html.replace(/(?<!_)_([^_\s][^_]*?)_(?!_)/g, "<em>$1</em>");
-
-  // Inline code: `code`
-  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
-
-  // Links: [text](url)
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
-  );
-
-  // Headers (must be at start of line)
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
-
-  // Paragraphs: split by double newlines
-  const paragraphs = html.split(/\n\n+/);
-  html = paragraphs
-    .map((p) => {
-      const trimmed = p.trim();
-      if (!trimmed) return "";
-
-      // Don't wrap if already has block tags
-      if (
-        /^<(h[1-6]|pre|ul|ol|blockquote|div)/.test(trimmed) ||
-        /^<\/(h[1-6]|pre|ul|ol|blockquote|div)/.test(trimmed)
-      ) {
-        return trimmed;
-      }
-
-      // Process lists within paragraph
-      const lines = trimmed.split("\n");
-      const processed: string[] = [];
-      let listItems: string[] = [];
-
-      for (const line of lines) {
-        if (/^[*-] /.test(line)) {
-          // This is a list item
-          listItems.push(`<li>${line.replace(/^[*-] /, "")}</li>`);
-        } else {
-          // Not a list item - flush any pending list items
-          if (listItems.length > 0) {
-            processed.push(`<ul>${listItems.join("")}</ul>`);
-            listItems = [];
-          }
-          processed.push(line);
-        }
-      }
-
-      // Flush any remaining list items
-      if (listItems.length > 0) {
-        processed.push(`<ul>${listItems.join("")}</ul>`);
-      }
-
-      // Join non-list content and wrap in <p>
-      const result = processed.join("\n");
-
-      // If result contains block tags, return as-is
-      if (/<(ul|pre|h[1-6])/.test(result)) {
-        return result;
-      }
-
-      // Otherwise wrap in paragraph
-      return `<p>${result.replace(/\n/g, "<br>")}</p>`;
-    })
-    .join("");
-
-  return html;
+  return marked(markdown, { async: false }) as string;
 }
 
 // ---------------------------------------------------------------------------
