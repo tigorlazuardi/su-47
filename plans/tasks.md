@@ -2,34 +2,34 @@
 
 ## Phase 1: Project Setup
 
-- [ ] Initialize git repository (`git init`)
-- [ ] Create `package.json` for Bun project
+- [x] Initialize git repository (`git init`)
+- [x] Create `package.json` for Bun project
   - `name: "su-47"`
   - Scripts: `dev`, `start`, `typecheck`, `check`, `format`, `lint`
   - `lint-staged` config: `"*.ts": ["biome check --write --no-errors-on-unmatched"]`
-- [ ] Create `tsconfig.json` (for `tsc --noEmit` typecheck only, no emit)
+- [x] Create `tsconfig.json` (for `tsc --noEmit` typecheck only, no emit)
   - `"target": "ESNext"`, `"module": "Bundler"`, `"moduleResolution": "bundler"`
   - `"strict": true`, `"noEmit": true`
-- [ ] Install dev dependencies via `bun add -d`:
+- [x] Install dev dependencies via `bun add -d`:
   - `typescript`
   - `@biomejs/biome`
   - `husky`
   - `lint-staged`
   - `@types/bun`
-- [ ] Create `biome.json`:
+- [x] Create `biome.json`:
   - `linter.rules.recommended: true`
   - `linter.rules.suspicious.noExplicitAny: "off"` (allow `any` in type params)
   - `linter.rules.style.noNonNullAssertion: "off"` (allow `!` non-null assertion)
   - `formatter.lineWidth: 100`
   - `formatter.indentStyle: "space"`, `indentWidth: 2`
   - `javascript.formatter.trailingCommas: "all"`
-- [ ] Setup Husky:
+- [x] Setup Husky:
   - `bunx husky init`
   - `.husky/pre-commit`: run `bun lint-staged` then `bun typecheck`
-- [ ] Create `.gitignore`
+- [x] Create `.gitignore`
   - `node_modules/`, `.env`, `dist/`
-- [ ] Create `LICENSE` (Apache 2.0)
-- [ ] Create `.env.example` with all required env vars
+- [x] Create `LICENSE` (Apache 2.0)
+- [x] Create `.env.example` with all required env vars
 
 ## Phase 2: Core Types & Config
 
@@ -115,7 +115,7 @@
     - `priority`: issue priority in list
     - `labels`: issue has at least one matching label
     - `complexity`: classifier output in list
-  - Classifier invoked lazily (only when a rule needs `complexity`)
+  - Classifier invoked lazily (only when a rule needs `complexity` and cache the response for later rules.
   - Returns `{ model: string, reason: string }`
 - [ ] `src/classifier.ts` — LLM complexity classifier
   - Spawn `claude -p --model $MODEL "$PROMPT"` with structured JSON prompt

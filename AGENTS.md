@@ -227,3 +227,11 @@ if (payload.event === "comment" && payload.action === "created") {
 |---------------|-----------------|---------------------------------|
 | `claude-home` | `/root/.claude` | Persist Claude CLI credentials  |
 | `repo-cache`  | `/repo-cache`   | Persistent git repo cache       |
+
+---
+
+## Task Tracking
+
+After completing any implementation task, update `plans/tasks.md` to reflect the current state:
+- Mark completed items with `[x]`
+- Keep the checklist accurate so it remains a reliable source of truth for project progress
