@@ -14,26 +14,103 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Convert a markdown string to minimal HTML suitable for Plane comments. */
+/** Convert a markdown string to HTML rich text suitable for Plane comments. */
 function markdownToHtml(markdown: string): string {
-  // Plane accepts HTML in comment_html. We do a simple conversion that handles
-  // the most common cases produced by our prompt builders.
-  const html = markdown
-    // Escape HTML special chars first
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/__(.+?)__/g, "<strong>$1</strong>")
-    // Inline code
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    // Links: [text](url)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    // Line breaks → <br>
-    .replace(/\n/g, "<br>");
+  // Plane uses TipTap/ProseMirror for rich text editing
+  let html = markdown;
 
-  return `<p>${html}</p>`;
+  // Process code blocks first (``` ... ```)
+  html = html.replace(/```([^\n]*)\n([\s\S]*?)```/g, (_match, _lang, code) => {
+    // Escape HTML in code block
+    const escaped = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<pre><code>${escaped}</code></pre>`;
+  });
+
+  // Escape HTML special chars in non-code sections
+  // Split by <pre> tags to avoid escaping code blocks
+  const parts = html.split(/(<pre>[\s\S]*?<\/pre>)/);
+  html = parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // Keep code blocks as-is
+      return part.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    })
+    .join("");
+
+  // Bold: **text** or __text__
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+
+  // Italic: *text* or _text_ (but not in URLs or already processed)
+  html = html.replace(/(?<!\*)\*([^*\s][^*]*?)\*(?!\*)/g, "<em>$1</em>");
+  html = html.replace(/(?<!_)_([^_\s][^_]*?)_(?!_)/g, "<em>$1</em>");
+
+  // Inline code: `code`
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Links: [text](url)
+  html = html.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+  );
+
+  // Headers (must be at start of line)
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Paragraphs: split by double newlines
+  const paragraphs = html.split(/\n\n+/);
+  html = paragraphs
+    .map((p) => {
+      const trimmed = p.trim();
+      if (!trimmed) return "";
+
+      // Don't wrap if already has block tags
+      if (
+        /^<(h[1-6]|pre|ul|ol|blockquote|div)/.test(trimmed) ||
+        /^<\/(h[1-6]|pre|ul|ol|blockquote|div)/.test(trimmed)
+      ) {
+        return trimmed;
+      }
+
+      // Process lists within paragraph
+      const lines = trimmed.split("\n");
+      const processed: string[] = [];
+      let listItems: string[] = [];
+
+      for (const line of lines) {
+        if (/^[*-] /.test(line)) {
+          // This is a list item
+          listItems.push(`<li>${line.replace(/^[*-] /, "")}</li>`);
+        } else {
+          // Not a list item - flush any pending list items
+          if (listItems.length > 0) {
+            processed.push(`<ul>${listItems.join("")}</ul>`);
+            listItems = [];
+          }
+          processed.push(line);
+        }
+      }
+
+      // Flush any remaining list items
+      if (listItems.length > 0) {
+        processed.push(`<ul>${listItems.join("")}</ul>`);
+      }
+
+      // Join non-list content and wrap in <p>
+      const result = processed.join("\n");
+
+      // If result contains block tags, return as-is
+      if (/<(ul|pre|h[1-6])/.test(result)) {
+        return result;
+      }
+
+      // Otherwise wrap in paragraph
+      return `<p>${result.replace(/\n/g, "<br>")}</p>`;
+    })
+    .join("");
+
+  return html;
 }
 
 // ---------------------------------------------------------------------------
