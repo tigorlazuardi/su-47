@@ -72,6 +72,8 @@ function requireEnv(name: string): string {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  const startTime = Date.now();
+
   const result: RunnerResult = {
     skipped: false,
   };
@@ -185,11 +187,17 @@ async function main(): Promise<void> {
       throw new Error(`Claude agent failed: ${claudeResult.stderr}`);
     }
 
-    // 7. Parse usage from stream-json output
-    console.log("[runner] Step 7: Parse usage");
+    // 7. Parse usage and changes summary from stream-json output
+    console.log("[runner] Step 7: Parse usage and changes summary");
     const usage = parseUsage(claudeResult.stdout);
     if (usage) {
       result.usage = usage;
+    }
+
+    // Extract changes summary from agent output
+    const changesSummary = extractChangesSummary(claudeResult.stdout);
+    if (changesSummary) {
+      result.changesSummary = changesSummary;
     }
 
     // 8. Check for changes
@@ -206,7 +214,14 @@ async function main(): Promise<void> {
     // 9. Commit changes
     console.log("[runner] Step 9: Commit changes");
     await spawn(["git", "add", "-A"], worktreeDir);
-    const commitMsg = `fix: ${projectSlug}-${sequenceId}`;
+
+    // Build commit message
+    const commitTitle = `fix: ${projectSlug}-${sequenceId}`;
+    let commitMsg = commitTitle;
+    if (changesSummary) {
+      commitMsg = `${commitTitle}\n\n${changesSummary}`;
+    }
+
     const commitResult = await spawn(["git", "commit", "-m", commitMsg], worktreeDir);
 
     if (commitResult.exitCode !== 0) {
@@ -225,6 +240,12 @@ async function main(): Promise<void> {
       throw new Error("Git push failed");
     }
 
+    // Build PR body
+    let prBody = `Automated fix for issue ${projectSlug}-${sequenceId}\n\nPlane issue: ${issueId}`;
+    if (changesSummary) {
+      prBody = `${prBody}\n\n---\n\n${changesSummary}`;
+    }
+
     const prResult = await spawn(
       [
         "gh",
@@ -235,9 +256,9 @@ async function main(): Promise<void> {
         "--head",
         branchName,
         "--title",
-        commitMsg,
+        commitTitle,
         "--body",
-        `Automated fix for issue ${projectSlug}-${sequenceId}\n\nPlane issue: ${issueId}`,
+        prBody,
       ],
       worktreeDir,
     );
@@ -263,10 +284,14 @@ async function main(): Promise<void> {
     console.error("[runner] Error:", err);
     result.error = String(err);
   } finally {
+    // Calculate duration
+    result.durationMs = Date.now() - startTime;
+
     // 12. Write result.json
     const resultPath = join(process.cwd(), "result.json");
     writeFileSync(resultPath, JSON.stringify(result, null, 2));
     console.log(`[runner] Wrote result to ${resultPath}`);
+    console.log(`[runner] Total duration: ${result.durationMs}ms`);
   }
 }
 
@@ -308,6 +333,49 @@ function calculateCost(usage: any): number {
   const cacheReadCost = (usage.cache_read_input_tokens ?? 0) * 0.0000003;
   const cacheWriteCost = (usage.cache_creation_input_tokens ?? 0) * 0.0000037;
   return inputCost + outputCost + cacheReadCost + cacheWriteCost;
+}
+
+// ---------------------------------------------------------------------------
+// Changes Summary Extractor
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract changes summary from claude agent output.
+ * Looks for "## Changes Summary" section in the output.
+ */
+function extractChangesSummary(streamJsonOutput: string): string | null {
+  try {
+    // Combine all content from stream-json output
+    const lines = streamJsonOutput.split("\n").filter((l) => l.trim());
+    let fullText = "";
+
+    for (const line of lines) {
+      try {
+        const data = JSON.parse(line);
+        // Extract text content from various possible fields
+        if (data.content) {
+          fullText += data.content;
+        } else if (data.text) {
+          fullText += data.text;
+        } else if (data.delta?.text) {
+          fullText += data.delta.text;
+        }
+      } catch {
+        // Skip non-JSON lines
+      }
+    }
+
+    // Extract ## Changes Summary section
+    const summaryMatch = fullText.match(/## Changes Summary\s*([\s\S]+?)(?=\n##|$)/i);
+    if (summaryMatch) {
+      return summaryMatch[0].trim();
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("[runner] Failed to extract changes summary:", err);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

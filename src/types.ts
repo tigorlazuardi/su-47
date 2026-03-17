@@ -179,5 +179,9 @@ export interface RunnerResult {
   usage?: RunnerUsage;
   /** True when the agent made no changes (nothing to commit) */
   skipped: boolean;
+  /** Summary of changes made (extracted from agent output) */
+  changesSummary?: string;
+  /** Duration in milliseconds */
+  durationMs?: number;
   error?: string;
 }

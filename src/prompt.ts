@@ -100,6 +100,13 @@ export function buildCompletionComment(result: RunnerResult): string {
   parts.push("✅ **Task completed**");
   parts.push("");
 
+  // Changes summary
+  if (result.changesSummary) {
+    parts.push(result.changesSummary);
+    parts.push("");
+  }
+
+  // Links
   if (result.prUrl) {
     parts.push(`**Pull Request:** ${result.prUrl}`);
   }
@@ -112,14 +119,32 @@ export function buildCompletionComment(result: RunnerResult): string {
     parts.push(`**SHA:** \`${result.commitSha}\``);
   }
 
+  // Duration
+  if (result.durationMs) {
+    const seconds = Math.floor(result.durationMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    parts.push("");
+    if (minutes > 0) {
+      parts.push(`**Duration:** ${minutes}m ${remainingSeconds}s`);
+    } else {
+      parts.push(`**Duration:** ${seconds}s`);
+    }
+  }
+
+  // Usage stats
   if (result.usage) {
     parts.push("");
-    parts.push("**Usage:**");
-    parts.push(`- Input tokens: ${result.usage.inputTokens.toLocaleString()}`);
-    parts.push(`- Output tokens: ${result.usage.outputTokens.toLocaleString()}`);
-    parts.push(`- Cache read tokens: ${result.usage.cacheReadTokens.toLocaleString()}`);
-    parts.push(`- Cache write tokens: ${result.usage.cacheWriteTokens.toLocaleString()}`);
-    parts.push(`- Cost: $${result.usage.costUsd.toFixed(4)}`);
+    parts.push("**Token Usage:**");
+    parts.push(`- Input: ${result.usage.inputTokens.toLocaleString()}`);
+    parts.push(`- Output: ${result.usage.outputTokens.toLocaleString()}`);
+    parts.push(`- Cache read: ${result.usage.cacheReadTokens.toLocaleString()}`);
+    parts.push(`- Cache write: ${result.usage.cacheWriteTokens.toLocaleString()}`);
+    parts.push(
+      `- **Total:** ${(result.usage.inputTokens + result.usage.outputTokens).toLocaleString()}`,
+    );
+    parts.push(`- **Cost:** $${result.usage.costUsd.toFixed(4)}`);
   }
 
   return parts.join("\n");

@@ -57,6 +57,38 @@ export function loadEnv(): Env {
 
 const CONFIG_PATH = process.env.SU47_CONFIG_PATH ?? "su-47.config.json";
 
+/** Default system prompt if not provided in config */
+const DEFAULT_PROMPT = `You are an expert software engineer working on a task.
+
+IMPORTANT: Before starting, read the project guidelines:
+1. Look for AGENTS.md in the repository root
+2. If AGENTS.md doesn't exist, look for CLAUDE.md instead
+3. Follow all instructions and conventions specified in those files
+
+After completing the task, you MUST provide a summary of your changes in the following format:
+
+## Changes Summary
+
+### Files Modified
+- \`path/to/file1.ts\`: Brief description of what changed and why
+- \`path/to/file2.ts\`: Brief description of what changed and why
+
+### Files Created
+- \`path/to/new-file.ts\`: Brief description of what this file does
+
+### Files Deleted
+- \`path/to/old-file.ts\`: Brief reason for deletion
+
+If no changes were made, explain why:
+- State the reason clearly (e.g., "No changes needed - the existing implementation already handles this case")
+
+This summary will be included in:
+1. Git commit message
+2. GitHub pull request body
+3. Plane issue comment
+
+Format the summary in clear, concise markdown.`;
+
 function parseConfig(raw: string): SukhoiConfig {
   let parsed: unknown;
   try {
@@ -67,12 +99,17 @@ function parseConfig(raw: string): SukhoiConfig {
 
   const cfg = parsed as Partial<SukhoiConfig>;
 
-  // Validate required fields
-  const required: (keyof SukhoiConfig)[] = ["repo", "baseBranch", "prompt", "states", "worklog"];
+  // Validate required fields (prompt is now optional)
+  const required: (keyof SukhoiConfig)[] = ["repo", "baseBranch", "states", "worklog"];
   for (const key of required) {
     if (cfg[key] === undefined) {
       throw new Error(`su-47.config.json missing required field: "${key}"`);
     }
+  }
+
+  // Use default prompt if not provided
+  if (!cfg.prompt) {
+    cfg.prompt = DEFAULT_PROMPT;
   }
 
   return cfg as SukhoiConfig;
